@@ -9,21 +9,22 @@ function cleanNumber(value) {
 
   let str = String(value).trim();
 
-  // Remove spaces and currency symbols
+  // Remove spaces and currency symbols, but keep digits, dots, and commas
   str = str.replace(/[^\d.,]/g, "");
 
-  // If both comma and dot exist, decide format
+  // If both dot and comma exist, assume European style like 5.000,50
   if (str.includes(".") && str.includes(",")) {
-    // Example: 5.000,50
     str = str.replace(/\./g, "");
     str = str.replace(",", ".");
-  } else if (str.includes(".")) {
-    // Example: 5.000
+  } 
+  // If only dot exists, check if it's a thousands separator like 5.000
+  else if (str.includes(".")) {
     if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
       str = str.replace(/\./g, "");
     }
-  } else if (str.includes(",")) {
-    // Example: 5,000 or 5000,50
+  } 
+  // If only comma exists, decide whether it's thousands or decimal separator
+  else if (str.includes(",")) {
     if (/^\d{1,3}(,\d{3})+$/.test(str)) {
       str = str.replace(/,/g, "");
     } else {
@@ -33,6 +34,7 @@ function cleanNumber(value) {
 
   return parseFloat(str);
 }
+
 app.get("/", (req, res) => {
   res.send("Wati loan webhook is running.");
 });
@@ -45,21 +47,21 @@ app.post("/calculate-loan", (req, res) => {
 
     if (isNaN(amount) || isNaN(desiredMonthly)) {
       return res.status(200).json({
-        success: false,
+        success: true,
         error_message: "Ungültige Eingabe. Kreditbetrag oder monatliche Rate ist keine gültige Zahl."
       });
     }
 
     if (amount < 3500) {
       return res.status(200).json({
-        success: false,
+        success: true,
         error_message: "Der Mindestkreditbetrag beträgt 3.500 €."
       });
     }
 
     if (desiredMonthly <= 0) {
       return res.status(200).json({
-        success: false,
+        success: true,
         error_message: "Die monatliche Rate muss größer als 0 sein."
       });
     }

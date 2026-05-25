@@ -6,12 +6,33 @@ app.use(express.urlencoded({ extended: true }));
 
 function cleanNumber(value) {
   if (value === undefined || value === null) return NaN;
+
   let str = String(value).trim();
-  str = str.replace(",", ".");
-  str = str.replace(/[^0-9.]/g, "");
+
+  // Remove spaces and currency symbols
+  str = str.replace(/[^\d.,]/g, "");
+
+  // If both comma and dot exist, decide format
+  if (str.includes(".") && str.includes(",")) {
+    // Example: 5.000,50
+    str = str.replace(/\./g, "");
+    str = str.replace(",", ".");
+  } else if (str.includes(".")) {
+    // Example: 5.000
+    if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+      str = str.replace(/\./g, "");
+    }
+  } else if (str.includes(",")) {
+    // Example: 5,000 or 5000,50
+    if (/^\d{1,3}(,\d{3})+$/.test(str)) {
+      str = str.replace(/,/g, "");
+    } else {
+      str = str.replace(",", ".");
+    }
+  }
+
   return parseFloat(str);
 }
-
 app.get("/", (req, res) => {
   res.send("Wati loan webhook is running.");
 });

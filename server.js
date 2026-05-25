@@ -59,6 +59,13 @@ app.post("/calculate-loan", (req, res) => {
       });
     }
 
+    if (amount > 300000) {
+      return res.status(200).json({
+        success: true,
+        error_message: "Der maximale Kreditbetrag beträgt 300.000 €."
+      });
+    }
+
     if (desiredMonthly <= 0) {
       return res.status(200).json({
         success: true,
@@ -67,7 +74,7 @@ app.post("/calculate-loan", (req, res) => {
     }
 
     const minYears = 1;
-    const maxYears = 10;
+    const maxYears = 25;
     const yearlyRate = 0.025;
 
     let bestYear = null;

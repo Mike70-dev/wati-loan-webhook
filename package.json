@@ -1,0 +1,12 @@
+{
+  "name": "wati-loan-webhook",
+  "version": "1.0.0",
+  "description": "Loan calculation webhook for Wati",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

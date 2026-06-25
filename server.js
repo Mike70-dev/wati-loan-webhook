@@ -115,9 +115,9 @@ Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringe
 
   return {
     success: true,
-    bestYear,
-    monthlyRounded,
-    amountRounded,
+    bestYear: bestYear,
+    monthlyRounded: monthlyRounded,
+    amountRounded: amountRounded,
     message: `Vielen Dank für die Rückmeldung.
 
 Wir können Ihnen folgendes Angebot machen:
@@ -181,4 +181,129 @@ app.get("/", (req, res) => {
     }
     button:hover {
       background: #0847aa;
-   
+    }
+    .output {
+      margin-top: 20px;
+    }
+    pre {
+      background: #f1f1f1;
+      padding: 16px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Loan Reply Generator</h1>
+    <p>Paste client text like:</p>
+    <p><strong>10000€ monatliche Rückzahlung 300€</strong> or <strong>10.000 / 150</strong></p>
+
+    <textarea id="inputText" placeholder="Paste client message here..."></textarea>
+    <br>
+    <button onclick="calculate()">Calculate</button>
+
+    <div class="output">
+      <h2>Reply Text</h2>
+      <pre id="result"></pre>
+    </div>
+  </div>
+
+  <script>
+    async function calculate() {
+      const inputText = document.getElementById("inputText").value;
+
+      const response = await fetch("/manual-calculate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ input: inputText })
+      });
+
+      const data = await response.json();
+      document.getElementById("result").textContent = data.message || "No result";
+    }
+  </script>
+</body>
+</html>
+  `);
+});
+
+app.post("/manual-calculate", (req, res) => {
+  try {
+    const input = normalizeInput(req.body.input);
+    const extracted = extractNumbers(input);
+
+    if (!extracted) {
+      return res.status(200).json({
+        success: false,
+        message: `Vielen Dank für die Rückmeldung.
+
+Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
+
+Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispiel so:
+10000 / 300`
+      });
+    }
+
+    const amount = cleanNumber(extracted[0]);
+    const desiredMonthly = cleanNumber(extracted[1]);
+    const result = calculateOffer(amount, desiredMonthly);
+
+    return res.status(200).json({
+      success: result.success,
+      message: result.message
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Interner Serverfehler."
+    });
+  }
+});
+
+app.post("/calculate-loan", (req, res) => {
+  try {
+    const amount = cleanNumber(req.body.loan_amount);
+    const desiredMonthly = cleanNumber(req.body.desired_monthly);
+    const phone = req.body.phone ? String(req.body.phone).replace(/[^\d]/g, "") : "";
+
+    const result = calculateOffer(amount, desiredMonthly);
+
+    if (!result.success) {
+      return res.status(200).json({
+        success: true,
+        phone: phone,
+        loan_amount: "",
+        desired_monthly: "",
+        best_year: "",
+        monthly_rate: "",
+        offer_text: "",
+        error_message: result.message
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      phone: phone,
+      loan_amount: result.amountRounded.toFixed(2),
+      desired_monthly: desiredMonthly.toFixed(2),
+      best_year: String(result.bestYear),
+      monthly_rate: result.monthlyRounded.toFixed(2),
+      offer_text: result.message,
+      error_message: ""
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error_message: "Interner Serverfehler."
+    });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});

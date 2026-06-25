@@ -91,6 +91,7 @@ Die monatliche Rate muss größer als 0 sein.`
     const totalRepayment = amount + interestTotal;
     const monthlyPayment = totalRepayment / (year * 12);
 
+    // Choose the highest affordable monthly payment that does not exceed the desired monthly amount
     if (monthlyPayment <= desiredMonthly) {
       if (bestMonthly === null || monthlyPayment > bestMonthly) {
         bestMonthly = monthlyPayment;
@@ -298,6 +299,41 @@ app.post("/calculate-loan", (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
+      error_message: "Interner Serverfehler."
+    });
+  }
+});
+
+app.post("/website-calculate", (req, res) => {
+  try {
+    const amount = cleanNumber(req.body.loan_amount);
+    const desiredMonthly = cleanNumber(req.body.desired_monthly);
+
+    const result = calculateOffer(amount, desiredMonthly);
+
+    if (!result.success) {
+      return res.status(200).json({
+        success: false,
+        loan_amount: "",
+        best_year: "",
+        monthly_rate: "",
+        error_message: result.message
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      loan_amount: result.amountRounded.toFixed(2),
+      best_year: String(result.bestYear),
+      monthly_rate: result.monthlyRounded.toFixed(2),
+      error_message: ""
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      loan_amount: "",
+      best_year: "",
+      monthly_rate: "",
       error_message: "Interner Serverfehler."
     });
   }

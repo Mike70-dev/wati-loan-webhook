@@ -160,7 +160,6 @@ function calculateOffer(amount, desiredMonthly, language = "de") {
     const totalRepayment = amount + interestTotal;
     const monthlyPayment = totalRepayment / (year * 12);
 
-    // Choose the highest affordable monthly payment that does not exceed the desired monthly amount
     if (monthlyPayment <= desiredMonthly) {
       if (bestMonthly === null || monthlyPayment > bestMonthly) {
         bestMonthly = monthlyPayment;
@@ -191,7 +190,7 @@ function calculateOffer(amount, desiredMonthly, language = "de") {
 app.get("/", (req, res) => {
   res.send(`
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -204,7 +203,7 @@ app.get("/", (req, res) => {
       padding: 40px;
     }
     .container {
-      max-width: 800px;
+      max-width: 860px;
       margin: auto;
       background: white;
       padding: 24px;
@@ -214,17 +213,46 @@ app.get("/", (req, res) => {
     h1 {
       margin-top: 0;
     }
-    textarea {
+    .lang-switch {
+      display: flex;
+      gap: 10px;
+      margin: 16px 0 24px 0;
+      flex-wrap: wrap;
+    }
+    .lang-btn {
+      padding: 10px 14px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .lang-btn.active {
+      background: #0b57d0;
+      color: #fff;
+      border-color: #0b57d0;
+    }
+    label {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    input {
       width: 100%;
-      min-height: 120px;
       padding: 12px;
       font-size: 16px;
       border: 1px solid #ccc;
       border-radius: 8px;
       box-sizing: border-box;
     }
-    button {
-      margin-top: 12px;
+    .helper {
+      color: #666;
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    button.calc {
+      margin-top: 16px;
       padding: 12px 18px;
       font-size: 16px;
       border: none;
@@ -233,7 +261,7 @@ app.get("/", (req, res) => {
       color: white;
       cursor: pointer;
     }
-    button:hover {
+    button.calc:hover {
       background: #0847aa;
     }
     .output {
@@ -245,40 +273,113 @@ app.get("/", (req, res) => {
       border-radius: 8px;
       white-space: pre-wrap;
       word-wrap: break-word;
+      min-height: 120px;
+    }
+    .section-title {
+      margin-top: 24px;
+      margin-bottom: 8px;
+      font-size: 18px;
+      font-weight: 700;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Loan Reply Generator</h1>
-    <p>Paste client text like:</p>
-    <p><strong>10000€ monatliche Rückzahlung 300€</strong> or <strong>10.000 / 150</strong></p>
+    <h1 id="title">Loan Reply Generator</h1>
+    <p id="intro1">Paste client text like:</p>
+    <p id="intro2"><strong>10000€ monthly repayment 300€</strong> or <strong>10.000 / 150</strong></p>
 
-    <textarea id="inputText" placeholder="Paste client message here..."></textarea>
-    <br>
-    <button onclick="calculate()">Calculate</button>
+    <div class="lang-switch">
+      <button id="btn-de" class="lang-btn active" onclick="setLanguage('de')">Deutsch</button>
+      <button id="btn-tr" class="lang-btn" onclick="setLanguage('tr')">Türkçe</button>
+    </div>
+
+    <label id="labelLoan" for="loan_amount">Loan Amount</label>
+    <input id="loan_amount" type="text" placeholder="e.g. 5000 or 10.000">
+
+    <label id="labelMonthly" for="desired_monthly">Desired Monthly Payment</label>
+    <input id="desired_monthly" type="text" placeholder="e.g. 100 or 750">
+
+    <div class="helper" id="helperText">
+      You can enter values like 5000 / 100, 10.000 / 150, or paste them from WhatsApp.
+    </div>
+
+    <button class="calc" onclick="calculate()">Calculate</button>
 
     <div class="output">
-      <h2>Reply Text</h2>
+      <div class="section-title" id="replyTitle">Reply Text</div>
       <pre id="result"></pre>
     </div>
   </div>
 
   <script>
-    async function calculate() {
-      const inputText = document.getElementById("inputText").value;
+    let currentLanguage = 'de';
 
-      const response = await fetch("/manual-calculate", {
+    const uiTexts = {
+      de: {
+        title: 'Loan Reply Generator',
+        intro1: 'Paste client text like:',
+        intro2: '<strong>10000€ monthly repayment 300€</strong> or <strong>10.000 / 150</strong>',
+        loanLabel: 'Loan Amount',
+        monthlyLabel: 'Desired Monthly Payment',
+        helper: 'You can enter values like 5000 / 100, 10.000 / 150, or paste them from WhatsApp.',
+        calculate: 'Calculate',
+        replyTitle: 'Reply Text',
+        placeholderLoan: 'e.g. 5000 or 10.000',
+        placeholderMonthly: 'e.g. 100 or 750'
+      },
+      tr: {
+        title: 'Kredi Cevap Oluşturucu',
+        intro1: 'Müşteri metnini yapıştırın, örneğin:',
+        intro2: '<strong>10000€ aylık ödeme 300€</strong> veya <strong>10.000 / 150</strong>',
+        loanLabel: 'Kredi Tutarı',
+        monthlyLabel: 'Beklenen Aylık Taksit',
+        helper: '5000 / 100, 10.000 / 150 gibi değerler girebilir veya WhatsApp’tan yapıştırabilirsiniz.',
+        calculate: 'Hesapla',
+        replyTitle: 'Cevap Metni',
+        placeholderLoan: 'örn. 5000 veya 10.000',
+        placeholderMonthly: 'örn. 100 veya 750'
+      }
+    };
+
+    function setLanguage(lang) {
+      currentLanguage = lang;
+      document.getElementById('btn-de').classList.toggle('active', lang === 'de');
+      document.getElementById('btn-tr').classList.toggle('active', lang === 'tr');
+
+      document.getElementById('title').textContent = uiTexts[lang].title;
+      document.getElementById('intro1').textContent = uiTexts[lang].intro1;
+      document.getElementById('intro2').innerHTML = uiTexts[lang].intro2;
+      document.getElementById('labelLoan').textContent = uiTexts[lang].loanLabel;
+      document.getElementById('labelMonthly').textContent = uiTexts[lang].monthlyLabel;
+      document.getElementById('helperText').textContent = uiTexts[lang].helper;
+      document.querySelector('button.calc').textContent = uiTexts[lang].calculate;
+      document.getElementById('replyTitle').textContent = uiTexts[lang].replyTitle;
+      document.getElementById('loan_amount').placeholder = uiTexts[lang].placeholderLoan;
+      document.getElementById('desired_monthly').placeholder = uiTexts[lang].placeholderMonthly;
+    }
+
+    async function calculate() {
+      const loanAmount = document.getElementById("loan_amount").value;
+      const desiredMonthly = document.getElementById("desired_monthly").value;
+
+      const response = await fetch("/website-calculate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ input: inputText })
+        body: JSON.stringify({
+          loan_amount: loanAmount,
+          desired_monthly: desiredMonthly,
+          language: currentLanguage
+        })
       });
 
       const data = await response.json();
-      document.getElementById("result").textContent = data.message || "No result";
+      document.getElementById("result").textContent = data.error_message || data.message || "No result";
     }
+
+    setLanguage('de');
   </script>
 </body>
 </html>

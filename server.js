@@ -41,43 +41,112 @@ function cleanNumber(value) {
   return parseFloat(str);
 }
 
-function calculateOffer(amount, desiredMonthly) {
-  if (isNaN(amount) || isNaN(desiredMonthly)) {
+function getMessages(language) {
+  const lang = (language || "de").toLowerCase();
+
+  if (lang === "tr") {
     return {
-      success: false,
-      message: `Vielen Dank für die Rückmeldung.
+      parseError: `Teşekkür ederiz.
+
+Bilgilerinizi net olarak işleyemedik.
+
+Lütfen kredi tutarını ve istediğiniz aylık ödemeyi örneğin şu şekilde gönderin:
+10000 / 300`,
+      minLoan: `Teşekkür ederiz.
+
+Asgari kredi tutarı 3.500 €'dur.`,
+      maxLoan: `Teşekkür ederiz.
+
+Azami kredi tutarı 300.000 €'dur.`,
+      invalidMonthly: `Teşekkür ederiz.
+
+Aylık taksit 0'dan büyük olmalıdır.`,
+      noOffer: `Teşekkür ederiz.
+
+İstenen aylık taksit ile bu kredi tutarı için azami vade içinde maalesef bir teklif mümkün değildir.
+
+Lütfen daha yüksek bir aylık ödeme tutarı veya daha düşük bir kredi tutarı düşünüp düşünmediğinizi bize bildirin.`,
+      offer: (amountRounded, bestYear, monthlyRounded) => `Teşekkür ederiz.
+
+Bilgilerinize dayanarak size aşağıdaki bağlayıcı olmayan teklifi sunabiliriz:
+
+Kredi tutarı: ${amountRounded} €
+
+Vade: ${bestYear} yıl
+
+Tahmini aylık taksit: ${monthlyRounded.toFixed(2)} €
+
+Gerekli belgelerin listesini size gönderebilmemiz için lütfen bunu kısaca onaylayın.
+
+Belgeleriniz incelendikten sonra nihai değerlendirme yapılacaktır.`
+    };
+  }
+
+  return {
+    parseError: `Vielen Dank für die Rückmeldung.
 
 Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
 
 Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispiel so:
-10000 / 300`
+10000 / 300`,
+    minLoan: `Vielen Dank für die Rückmeldung.
+
+Der Mindestkreditbetrag beträgt 3.500 €.`,
+    maxLoan: `Vielen Dank für die Rückmeldung.
+
+Der maximale Kreditbetrag beträgt 300.000 €.`,
+    invalidMonthly: `Vielen Dank für die Rückmeldung.
+
+Die monatliche Rate muss größer als 0 sein.`,
+    noOffer: `Vielen Dank für die Rückmeldung.
+
+Mit der gewünschten monatlichen Rate ist für diesen Kreditbetrag innerhalb der maximalen Laufzeit leider kein Angebot möglich.
+
+Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringerer Kreditbetrag für Sie infrage kommt.`,
+    offer: (amountRounded, bestYear, monthlyRounded) => `Vielen Dank für die Rückmeldung.
+
+Wir können Ihnen folgendes Angebot machen:
+
+Kredit über ${amountRounded} €
+
+Laufzeit ${bestYear} Jahre
+
+monatliche Rate: ${monthlyRounded.toFixed(2)} €
+
+Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
+
+Bei Fragen melden Sie sich gerne jederzeit.`
+  };
+}
+
+function calculateOffer(amount, desiredMonthly, language = "de") {
+  const msgs = getMessages(language);
+
+  if (isNaN(amount) || isNaN(desiredMonthly)) {
+    return {
+      success: false,
+      message: msgs.parseError
     };
   }
 
   if (amount < 3500) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Der Mindestkreditbetrag beträgt 3.500 €.`
+      message: msgs.minLoan
     };
   }
 
   if (amount > 300000) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Der maximale Kreditbetrag beträgt 300.000 €.`
+      message: msgs.maxLoan
     };
   }
 
   if (desiredMonthly <= 0) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Die monatliche Rate muss größer als 0 sein.`
+      message: msgs.invalidMonthly
     };
   }
 
@@ -105,11 +174,7 @@ Die monatliche Rate muss größer als 0 sein.`
   if (bestYear === null || bestMonthly === null) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Mit der gewünschten monatlichen Rate ist für diesen Kreditbetrag innerhalb der maximalen Laufzeit leider kein Angebot möglich.
-
-Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringerer Kreditbetrag für Sie infrage kommt.`
+      message: msgs.noOffer
     };
   }
 
@@ -121,19 +186,7 @@ Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringe
     bestYear: bestYear,
     monthlyRounded: monthlyRounded,
     amountRounded: amountRounded,
-    message: `Vielen Dank für die Rückmeldung.
-
-Wir können Ihnen folgendes Angebot machen:
-
-Kredit über ${amountRounded} €
-
-Laufzeit ${bestYear} Jahre
-
-monatliche Rate ${monthlyRounded.toFixed(2)} €
-
-Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
-
-Bei Fragen melden Sie sich gerne jederzeit.`
+    message: msgs.offer(amountRounded, bestYear, monthlyRounded)
   };
 }
 
@@ -253,7 +306,7 @@ Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispi
 
     const amount = cleanNumber(extracted[0]);
     const desiredMonthly = cleanNumber(extracted[1]);
-    const result = calculateOffer(amount, desiredMonthly);
+    const result = calculateOffer(amount, desiredMonthly, "de");
 
     return res.status(200).json({
       success: result.success,
@@ -272,8 +325,9 @@ app.post("/calculate-loan", (req, res) => {
     const amount = cleanNumber(req.body.loan_amount);
     const desiredMonthly = cleanNumber(req.body.desired_monthly);
     const phone = req.body.phone ? String(req.body.phone).replace(/[^\d]/g, "") : "";
+    const language = req.body.language || "de";
 
-    const result = calculateOffer(amount, desiredMonthly);
+    const result = calculateOffer(amount, desiredMonthly, language);
 
     if (!result.success) {
       return res.status(200).json({
@@ -310,8 +364,9 @@ app.post("/website-calculate", (req, res) => {
   try {
     const amount = cleanNumber(req.body.loan_amount);
     const desiredMonthly = cleanNumber(req.body.desired_monthly);
+    const language = req.body.language || "de";
 
-    const result = calculateOffer(amount, desiredMonthly);
+    const result = calculateOffer(amount, desiredMonthly, language);
 
     if (!result.success) {
       return res.status(200).json({

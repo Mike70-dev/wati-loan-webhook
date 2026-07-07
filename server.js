@@ -66,14 +66,12 @@ Aylık taksit 0'dan büyük olmalıdır.`,
 İstenen aylık taksit ile bu kredi tutarı için azami vade içinde maalesef bir teklif mümkün değildir.
 
 Lütfen daha yüksek bir aylık ödeme tutarı veya daha düşük bir kredi tutarı düşünüp düşünmediğinizi bize bildirin.`,
-      offer: (amountRounded, bestYear, monthlyRounded) => `Teşekkür ederiz.
+      offer: (amountRounded, bestYear, monthlyRounded) => `Az önce gerçekleştirmiş olduğumuz telefon görüşmesi için teşekkür ederiz.
 
-Bilgilerinize dayanarak size aşağıdaki bağlayıcı olmayan teklifi sunabiliriz:
+Telefonda yapılan değerlendirmeye ilişkin hesaplama özeti aşağıda bilgilerinize sunulmuştur:
 
 Kredi tutarı: ${amountRounded} €
-
 Vade: ${bestYear} yıl
-
 Tahmini aylık taksit: ${monthlyRounded.toFixed(2)} €
 
 Lütfen bilgileri kontrol ederek uygun bulmanız halinde bu sohbet üzerinden tarafımıza teyit iletmenizi rica ederiz. Onayınız sonrasında, sürecin devamı için gerekli belgeler tarafınıza iletilecektir.
@@ -111,7 +109,7 @@ Kredit über ${amountRounded} €
 
 Laufzeit ${bestYear} Jahre
 
-monatliche Rate ${monthlyRounded.toFixed(2)} €
+monatliche Rate: ${monthlyRounded.toFixed(2)} €
 
 Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
 

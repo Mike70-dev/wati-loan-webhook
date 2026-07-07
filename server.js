@@ -160,7 +160,6 @@ function calculateOffer(amount, desiredMonthly, language = "de") {
     const totalRepayment = amount + interestTotal;
     const monthlyPayment = totalRepayment / (year * 12);
 
-    // Choose the highest affordable monthly payment that does not exceed the desired monthly amount
     if (monthlyPayment <= desiredMonthly) {
       if (bestMonthly === null || monthlyPayment > bestMonthly) {
         bestMonthly = monthlyPayment;
@@ -186,6 +185,38 @@ function calculateOffer(amount, desiredMonthly, language = "de") {
     amountRounded: amountRounded,
     message: msgs.offer(amountRounded, bestYear, monthlyRounded)
   };
+}
+
+function buildFrontEndText(language, success, data) {
+  if (!success) return data.error_message || data.message || "No result";
+
+  if (language === "tr") {
+    return `Az önce gerçekleştirmiş olduğumuz telefon görüşmesi için teşekkür ederiz.
+
+Telefonda yapılan değerlendirmeye ilişkin hesaplama özeti aşağıda bilgilerinize sunulmuştur:
+
+Kredi tutarı: ${data.loan_amount} €
+Vade: ${data.best_year} yıl
+Tahmini aylık taksit: ${Number(data.monthly_rate).toFixed(2)} €
+
+Lütfen bilgileri kontrol ederek uygun bulmanız halinde bu sohbet üzerinden tarafımıza teyit iletmenizi rica ederiz. Onayınız sonrasında, sürecin devamı için gerekli belgeler tarafınıza iletilecektir.
+
+Sonuçların, hafta sonları hariç olmak üzere, 24 saat içerisinde paylaşılması planlanmaktadır.`;
+  }
+
+  return `Vielen Dank für die Rückmeldung.
+
+Wir können Ihnen folgendes Angebot machen:
+
+Kredit über ${data.loan_amount} €
+
+Laufzeit ${data.best_year} Jahre
+
+monatliche Rate: ${Number(data.monthly_rate).toFixed(2)} €
+
+Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
+
+Bei Fragen melden Sie sich gerne jederzeit.`;
 }
 
 app.get("/", (req, res) => {
@@ -361,14 +392,34 @@ app.get("/", (req, res) => {
       document.getElementById('result').textContent = '';
     }
 
-    function buildReply(language, success, data) {
-      const isTr = language === 'tr';
+    async function calculate() {
+      const loanAmount = document.getElementById("loan_amount").value;
+      const desiredMonthly = document.getElementById("desired_monthly").value;
 
+      const response = await fetch("/website-calculate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          loan_amount: loanAmount,
+          desired_monthly: desiredMonthly,
+          language: currentLanguage
+        })
+      });
+
+      const data = await response.json();
+
+      const reply = buildReply(currentLanguage, data.success, data);
+      document.getElementById("result").textContent = reply || "No result";
+    }
+
+    function buildReply(language, success, data) {
       if (!success) {
-        return data.error_message || data.message || '';
+        return data.error_message || data.message || "No result";
       }
 
-      if (isTr) {
+      if (language === 'tr') {
         return `Az önce gerçekleştirmiş olduğumuz telefon görüşmesi için teşekkür ederiz.
 
 Telefonda yapılan değerlendirmeye ilişkin hesaplama özeti aşağıda bilgilerinize sunulmuştur:
@@ -395,28 +446,6 @@ monatliche Rate: ${Number(data.monthly_rate).toFixed(2)} €
 Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
 
 Bei Fragen melden Sie sich gerne jederzeit.`;
-    }
-
-    async function calculate() {
-      const loanAmount = document.getElementById("loan_amount").value;
-      const desiredMonthly = document.getElementById("desired_monthly").value;
-
-      const response = await fetch("/website-calculate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          loan_amount: loanAmount,
-          desired_monthly: desiredMonthly,
-          language: currentLanguage
-        })
-      });
-
-      const data = await response.json();
-
-      const reply = buildReply(currentLanguage, data.success, data);
-      document.getElementById("result").textContent = reply || "No result";
     }
 
     setLanguage('de');

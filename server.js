@@ -76,9 +76,9 @@ Vade: ${bestYear} yıl
 
 Tahmini aylık taksit: ${monthlyRounded.toFixed(2)} €
 
-Gerekli belgelerin listesini size gönderebilmemiz için lütfen bunu kısaca onaylayın.
+Lütfen bilgileri kontrol ederek uygun bulmanız halinde bu sohbet üzerinden tarafımıza teyit iletmenizi rica ederiz. Onayınız sonrasında, sürecin devamı için gerekli belgeler tarafınıza iletilecektir.
 
-Belgeleriniz incelendikten sonra nihai değerlendirme yapılacaktır.`
+Sonuçların, hafta sonları hariç olmak üzere, 24 saat içerisinde paylaşılması planlanmaktadır.`
     };
   }
 
@@ -111,7 +111,7 @@ Kredit über ${amountRounded} €
 
 Laufzeit ${bestYear} Jahre
 
-monatliche Rate: ${monthlyRounded.toFixed(2)} €
+monatliche Rate ${monthlyRounded.toFixed(2)} €
 
 Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
 

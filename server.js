@@ -7,6 +7,20 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+/* =========================
+   COMPANY DETAILS
+========================= */
+
+const COMPANY_NAME = "JJM Consulting GmbH";
+const COMPANY_ADDRESS = "Gerda-Hasselfeldt-Ring 6b, 85235 Pfaffenhofen an der Glonn";
+const COMPANY_PHONE = "0177 136 38 11";
+const COMPANY_WEBSITE = "https://www.jjmconsultinggmbh.com";
+const COMPANY_EMAIL = "finanzierung@jjmconsultinggmbh.com";
+
+/* =========================
+   HELPERS
+========================= */
+
 function normalizeInput(text) {
   if (!text) return "";
   return String(text).trim();
@@ -23,7 +37,8 @@ function cleanNumber(value) {
 
   let str = String(value).trim();
 
-  // Take the first number-like part if the value contains text or ranges
+  // If the value contains text or a range, take the first number-like value.
+  // Example: "3.500 - 20.000 €" -> "3.500"
   const match = str.match(/[\d.,]+/);
   if (!match) return NaN;
 
@@ -58,6 +73,23 @@ function formatEuro(value) {
     maximumFractionDigits: 2
   });
 }
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function textToHtml(text) {
+  return escapeHtml(text).replace(/\n/g, "<br>");
+}
+
+/* =========================
+   LOAN CALCULATION
+========================= */
 
 function calculateOffer(amount, desiredMonthly) {
   if (isNaN(amount) || isNaN(desiredMonthly)) {
@@ -136,6 +168,10 @@ Geschätzte monatliche Rate: ${formatEuro(monthlyRounded)} €`
   };
 }
 
+/* =========================
+   DOCUMENT LIST
+========================= */
+
 function getDocumentsList(employment) {
   const emp = String(employment || "").toLowerCase();
 
@@ -165,24 +201,15 @@ function getDocumentsList(employment) {
 - Arbeitsvertrag oder Beschäftigungsnachweis`;
 }
 
-function escapeHtml(text) {
-  return String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function textToHtml(text) {
-  return escapeHtml(text).replace(/\n/g, "<br>");
-}
+/* =========================
+   ZOHO EMAIL SENDER
+========================= */
 
 async function sendZohoEmail({ to, toName, subject, htmlbody }) {
   const host = process.env.ZOHO_CPAA_HOST || "https://cpaas.zoho.eu";
   const token = process.env.ZOHO_CPAA_TOKEN;
   const fromEmail = process.env.FROM_EMAIL;
-  const fromName = process.env.FROM_NAME || "Finanzierungsteam";
+  const fromName = process.env.FROM_NAME || COMPANY_NAME;
   const replyTo = process.env.REPLY_TO_EMAIL || fromEmail;
 
   if (!token) throw new Error("ZOHO_CPAA_TOKEN fehlt.");
@@ -231,6 +258,10 @@ async function sendZohoEmail({ to, toName, subject, htmlbody }) {
   return data;
 }
 
+/* =========================
+   HTML EMAILS
+========================= */
+
 function buildClientEmailHtml({
   name,
   amount,
@@ -269,7 +300,7 @@ function buildClientEmailHtml({
 
       <div style="padding:28px;">
         <p style="font-size:16px; line-height:1.6; margin:0 0 18px;">
-          Hallo ${safeName || " "},
+          Hallo ${safeName || ""},
         </p>
 
         <p style="font-size:16px; line-height:1.6; margin:0 0 20px;">
@@ -295,7 +326,7 @@ function buildClientEmailHtml({
         </div>
 
         <h2 style="font-size:18px; margin:24px 0 12px; color:#111827;">Benötigte Unterlagen</h2>
-        <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:18px; margin-bottom:22px; line-height:1.6;">
+        <div style="background:#f9fafb; border-radius:10px; padding:18px; border:1px solid #e5e7eb; margin-bottom:22px; line-height:1.6;">
           ${documentsHtml}
         </div>
 
@@ -306,14 +337,46 @@ function buildClientEmailHtml({
 
         <p style="font-size:16px; line-height:1.6; margin:28px 0 0;">
           Viele Grüße<br>
-          <strong>Ihr Finanzierungsteam</strong>
+          <strong>${escapeHtml(COMPANY_NAME)}</strong>
         </p>
       </div>
     </div>
 
-    <p style="font-size:12px; color:#6b7280; line-height:1.5; margin:16px 4px 0;">
-      Sie erhalten diese E-Mail, weil Sie eine Finanzierungsanfrage gestellt haben.
-    </p>
+    <div style="font-size:12px; color:#6b7280; line-height:1.6; margin:18px 4px 0; text-align:center;">
+      <p style="margin:0 0 8px;">
+        Sie erhalten diese E-Mail, weil Sie eine Finanzierungsanfrage gestellt haben.
+      </p>
+
+      <p style="margin:0 0 6px;">
+        <strong>${escapeHtml(COMPANY_NAME)}</strong>
+      </p>
+
+      <p style="margin:0 0 6px;">
+        ${escapeHtml(COMPANY_ADDRESS)}
+      </p>
+
+      <p style="margin:0 0 6px;">
+        Telefon:
+        <a href="tel:${escapeHtml(COMPANY_PHONE.replace(/\\s/g, ""))}" style="color:#2563eb; text-decoration:none;">
+          ${escapeHtml(COMPANY_PHONE)}
+        </a>
+      </p>
+
+      <p style="margin:0 0 6px;">
+        E-Mail:
+        <a href="mailto:${escapeHtml(COMPANY_EMAIL)}" style="color:#2563eb; text-decoration:none;">
+          ${escapeHtml(COMPANY_EMAIL)}
+        </a>
+      </p>
+
+      <p style="margin:0;">
+        Webseite:
+        <a href="${escapeHtml(COMPANY_WEBSITE)}" style="color:#2563eb; text-decoration:none;">
+          ${escapeHtml(COMPANY_WEBSITE)}
+        </a>
+      </p>
+    </div>
+
   </div>
 </div>
 `;
@@ -350,10 +413,24 @@ function buildInternalEmailHtml({
     ${calculationHtml}
 
     <p>Bitte zeitnah bearbeiten.</p>
+
+    <hr style="border:none; border-top:1px solid #e5e7eb; margin:20px 0;">
+
+    <p style="font-size:12px; color:#6b7280; line-height:1.6;">
+      ${escapeHtml(COMPANY_NAME)}<br>
+      ${escapeHtml(COMPANY_ADDRESS)}<br>
+      Telefon: ${escapeHtml(COMPANY_PHONE)}<br>
+      E-Mail: ${escapeHtml(COMPANY_EMAIL)}<br>
+      Webseite: ${escapeHtml(COMPANY_WEBSITE)}
+    </p>
   </div>
 </div>
 `;
 }
+
+/* =========================
+   ROUTES
+========================= */
 
 app.get("/", (req, res) => {
   res.json({
@@ -480,14 +557,53 @@ app.post("/website-calculate", (req, res) => {
 
 app.post("/send-loan-email", async (req, res) => {
   try {
-    const name = normalizeInput(req.body.name);
-    const email = normalizeInput(req.body.email);
-    const phone = normalizeInput(req.body.phone);
+    const body = req.body || {};
 
-    const amount = cleanNumber(req.body.loan_amount || req.body.amount);
-    const desiredMonthly = cleanNumber(req.body.desired_monthly || req.body.monthly_rate);
+    const name = normalizeInput(
+      body.name ||
+      body.full_name ||
+      body.fullName ||
+      body["Full Name"] ||
+      body["full name"]
+    );
 
-    const employment = normalizeInput(req.body.employment);
+    const email = normalizeInput(
+      body.email ||
+      body.Email ||
+      body["E-Mail"] ||
+      body["Email Address"]
+    );
+
+    const phone = normalizeInput(
+      body.phone ||
+      body.Phone ||
+      body.phone_number ||
+      body["Phone Number"] ||
+      body["Telefonnummer"]
+    );
+
+    const amountRaw =
+      body.loan_amount ||
+      body.amount ||
+      body["Loan Amount"] ||
+      body["Welchen Kreditbetrag möchten Sie anfragen?"] ||
+      body["Kreditbetrag"];
+
+    const desiredMonthlyRaw =
+      body.desired_monthly ||
+      body.monthly_rate ||
+      body["Desired Monthly"] ||
+      body["Welche monatliche Rate möchten Sie ungefähr zahlen?"] ||
+      body["Monatliche Rate"];
+
+    const employment = normalizeInput(
+      body.employment ||
+      body.Employment ||
+      body["Beschäftigung"]
+    );
+
+    const amount = cleanNumber(amountRaw);
+    const desiredMonthly = cleanNumber(desiredMonthlyRaw);
 
     if (!email) {
       return res.status(400).json({
@@ -548,6 +664,10 @@ app.post("/send-loan-email", async (req, res) => {
     });
   }
 });
+
+/* =========================
+   START SERVER
+========================= */
 
 const PORT = process.env.PORT || 3000;
 

@@ -37,7 +37,6 @@ function cleanNumber(value) {
 
   let str = String(value).trim();
 
-  // Take first number-like part if value contains ranges or text
   const match = str.match(/[\d.,]+/);
   if (!match) return NaN;
 
@@ -236,7 +235,7 @@ async function sendZohoEmail({ to, toName, subject, htmlbody }) {
 }
 
 /* =========================
-   HTML EMAIL BUILDERS
+   HTML EMAIL BUILDER
 ========================= */
 
 function buildClientEmailHtml({ name, amount, desiredMonthly, result, documentsList }) {
@@ -348,45 +347,6 @@ function buildClientEmailHtml({ name, amount, desiredMonthly, result, documentsL
       </p>
     </div>
 
-  </div>
-</div>
-`;
-}
-
-function buildInternalEmailHtml({ name, email, phone, amount, desiredMonthly, result }) {
-  const calculationHtml = result.success
-    ? `
-      <p><strong>Finanzierungsbetrag:</strong> ${formatEuro(result.amountRounded)} €</p>
-      <p><strong>Laufzeit:</strong> ${result.bestYear} Jahre</p>
-      <p><strong>Geschätzte monatliche Rate:</strong> ${formatEuro(result.monthlyRounded)} €</p>
-    `
-    : `<p>${textToHtml(result.message)}</p>`;
-
-  return `
-<div style="font-family:Arial, Helvetica, sans-serif; background:#f4f6f8; padding:24px;">
-  <div style="max-width:680px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:24px;">
-    <h2 style="margin-top:0;">Neue Finanzierungsanfrage</h2>
-
-    <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-    <p><strong>E-Mail:</strong> ${escapeHtml(email)}</p>
-    <p><strong>Telefon:</strong> ${escapeHtml(phone)}</p>
-    <p><strong>Betrag:</strong> ${isNaN(amount) ? "" : formatEuro(amount) + " €"}</p>
-    <p><strong>Wunschrate:</strong> ${isNaN(desiredMonthly) ? "" : formatEuro(desiredMonthly) + " €"}</p>
-
-    <h3>Berechnung</h3>
-    ${calculationHtml}
-
-    <p>Bitte zeitnah bearbeiten.</p>
-
-    <hr style="border:none; border-top:1px solid #e5e7eb; margin:20px 0;">
-
-    <p style="font-size:12px; color:#6b7280; line-height:1.6;">
-      ${escapeHtml(COMPANY_NAME)}<br>
-      ${escapeHtml(COMPANY_ADDRESS)}<br>
-      Telefon: ${escapeHtml(COMPANY_PHONE)}<br>
-      E-Mail: ${escapeHtml(COMPANY_EMAIL)}<br>
-      Webseite: ${escapeHtml(COMPANY_WEBSITE)}
-    </p>
   </div>
 </div>
 `;
@@ -536,14 +496,6 @@ app.post("/send-loan-email", async (req, res) => {
       body["Email Address"]
     );
 
-    const phone = normalizeInput(
-      body.phone ||
-      body.Phone ||
-      body.phone_number ||
-      body["Phone Number"] ||
-      body["Telefonnummer"]
-    );
-
     const amountRaw =
       body.loan_amount ||
       body.amount ||
@@ -579,30 +531,12 @@ app.post("/send-loan-email", async (req, res) => {
       documentsList
     });
 
-    const internalEmailHtml = buildInternalEmailHtml({
-      name,
-      email,
-      phone,
-      amount,
-      desiredMonthly,
-      result
-    });
-
     await sendZohoEmail({
       to: email,
       toName: name,
       subject: "Ihre Anfrage ist eingegangen",
       htmlbody: clientEmailHtml
     });
-
-    if (process.env.INTERNAL_NOTIFY_EMAIL) {
-      await sendZohoEmail({
-        to: process.env.INTERNAL_NOTIFY_EMAIL,
-        toName: "Intern",
-        subject: "Neue Finanzierungsanfrage",
-        htmlbody: internalEmailHtml
-      });
-    }
 
     return res.status(200).json({
       success: true,

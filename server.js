@@ -1,6 +1,9 @@
 const express = require("express");
 const cors = require("cors");
+const { Resend } = require("resend");
+
 const app = express();
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 app.use(cors());
 app.use(express.json());
@@ -93,7 +96,6 @@ Die monatliche Rate muss größer als 0 sein.`
     const totalRepayment = amount + interestTotal;
     const monthlyPayment = totalRepayment / (year * 12);
 
-    // Choose the highest affordable monthly payment that does not exceed the desired monthly amount
     if (monthlyPayment <= desiredMonthly) {
       if (bestMonthly === null || monthlyPayment > bestMonthly) {
         bestMonthly = monthlyPayment;
@@ -135,6 +137,43 @@ Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag e
 
 Bei Fragen melden Sie sich gerne jederzeit.`
   };
+}
+
+function formatEuro(value) {
+  if (value === undefined || value === null || isNaN(value)) return "";
+  return Number(value).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function getDocumentsList(employment) {
+  const emp = String(employment || "").toLowerCase();
+
+  if (emp.includes("selbst")) {
+    return `- Personalausweis oder Reisepass
+- Kontoauszüge der letzten 3 Monate
+- Aktuelle BWA
+- Letzter Steuerbescheid
+- Gewerbeanmeldung, falls vorhanden`;
+  }
+
+  if (emp.includes("rent")) {
+    return `- Personalausweis oder Reisepass
+- Rentenbescheid
+- Kontoauszüge der letzten 3 Monate`;
+  }
+
+  if (emp.includes("arbeitslos")) {
+    return `- Personalausweis oder Reisepass
+- Nachweis über aktuelle Leistungen
+- Kontoauszüge der letzten 3 Monate`;
+  }
+
+  return `- Personalausweis oder Reisepass
+- Einkommensnachweise der letzten 3 Monate
+- Kontoauszüge der letzten 3 Monate
+- Arbeitsvertrag oder Beschäftigungsnachweis`;
 }
 
 app.get("/", (req, res) => {
@@ -337,6 +376,135 @@ app.post("/website-calculate", (req, res) => {
       best_year: "",
       monthly_rate: "",
       error_message: "Interner Serverfehler."
+    });
+  }
+});
+
+app.post("/send-loan-email", async (req, res) => {
+  try {
+    const name = normalizeInput(req.body.name);
+    const email = normalizeInput(req.body.email);
+    const phone = normalizeInput(req.body.phone);
+
+    const amount = cleanNumber(req.body.loan_amount || req.body.amount);
+    const desiredMonthly = cleanNumber(req.body.desired_monthly || req.body.monthly_rate);
+
+    const income = normalizeInput(req.body.income);
+    const schufa = normalizeInput(req.body.schufa);
+    const employment = normalizeInput(req.body.employment);
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error_message: "E-Mail-Adresse fehlt."
+      });
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error_message: "RESEND_API_KEY fehlt in Render Environment Variables."
+      });
+    }
+
+    if (!process.env.FROM_EMAIL) {
+      return res.status(500).json({
+        success: false,
+        error_message: "FROM_EMAIL fehlt in Render Environment Variables."
+      });
+    }
+
+    const result = calculateOffer(amount, desiredMonthly);
+    const documentsList = getDocumentsList(employment);
+
+    let calculationText = "";
+
+    if (result.success) {
+      calculationText = `Unverbindliche Beispielrechnung:
+Finanzierungsbetrag: ${formatEuro(result.amountRounded)} €
+Laufzeit: ${result.bestYear} Jahre
+Geschätzte monatliche Rate: ${formatEuro(result.monthlyRounded)} €`;
+    } else {
+      calculationText = `Hinweis:
+${result.message}`;
+    }
+
+    const clientEmailText = `Hallo ${name || ""},
+
+vielen Dank für Ihre Finanzierungsanfrage.
+
+Wir haben Ihre Angaben erhalten und eine erste unverbindliche Einschätzung für Sie vorbereitet.
+
+Ihre Angaben:
+Gewünschter Betrag: ${isNaN(amount) ? "" : formatEuro(amount) + " €"}
+Gewünschte monatliche Rate: ${isNaN(desiredMonthly) ? "" : formatEuro(desiredMonthly) + " €"}
+Einkommen vorhanden: ${income}
+SCHUFA-Situation: ${schufa}
+Beschäftigung: ${employment}
+
+${calculationText}
+
+Wichtig:
+Dies ist keine finale Zusage. Die endgültige Prüfung hängt von Ihren Unterlagen, Ihrer Bonität und der Entscheidung des Finanzierungspartners ab.
+
+Für die weitere Prüfung benötigen wir folgende Unterlagen:
+
+${documentsList}
+
+Bitte antworten Sie einfach auf diese E-Mail mit den Unterlagen oder teilen Sie uns mit, wann wir Sie telefonisch erreichen können.
+
+Viele Grüße
+Ihr Finanzierungsteam`;
+
+    const internalEmailText = `Neue Finanzierungsanfrage eingegangen:
+
+Name: ${name}
+E-Mail: ${email}
+Telefon: ${phone}
+Betrag: ${isNaN(amount) ? "" : formatEuro(amount) + " €"}
+Wunschrate: ${isNaN(desiredMonthly) ? "" : formatEuro(desiredMonthly) + " €"}
+Einkommen: ${income}
+SCHUFA: ${schufa}
+Beschäftigung: ${employment}
+
+${calculationText}
+
+Bitte zeitnah kontaktieren.`;
+
+    const fromEmail = `Finanzierungsteam <${process.env.FROM_EMAIL}>`;
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: email,
+      replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL,
+      subject: "Ihre Finanzierungsanfrage – erste unverbindliche Einschätzung",
+      text: clientEmailText
+    });
+
+    if (process.env.INTERNAL_NOTIFY_EMAIL) {
+      await resend.emails.send({
+        from: fromEmail,
+        to: process.env.INTERNAL_NOTIFY_EMAIL,
+        replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL,
+        subject: "Neue Finanzierungsanfrage",
+        text: internalEmailText
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "E-Mail wurde erfolgreich gesendet.",
+      email_sent_to: email,
+      calculation_success: result.success
+    });
+
+  } catch (error) {
+    console.error("send-loan-email error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error_message: "Interner Serverfehler beim Senden der E-Mail.",
+      details: error.message
     });
   }
 });

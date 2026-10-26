@@ -22,16 +22,25 @@ function cleanNumber(value) {
   if (value === undefined || value === null) return NaN;
 
   let str = String(value).trim();
+
+  // Take the first number-like part if the value contains text or ranges
+  const match = str.match(/[\d.,]+/);
+  if (!match) return NaN;
+
+  str = match[0];
   str = str.replace(/[^\d.,]/g, "");
 
   if (str.includes(".") && str.includes(",")) {
+    // German format: 10.000,50 -> 10000.50
     str = str.replace(/\./g, "");
     str = str.replace(",", ".");
   } else if (str.includes(".")) {
+    // German thousand separator: 10.000 -> 10000
     if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
       str = str.replace(/\./g, "");
     }
   } else if (str.includes(",")) {
+    // German decimal comma or thousand comma
     if (/^\d{1,3}(,\d{3})+$/.test(str)) {
       str = str.replace(/,/g, "");
     } else {
@@ -54,9 +63,7 @@ function calculateOffer(amount, desiredMonthly) {
   if (isNaN(amount) || isNaN(desiredMonthly)) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
+      message: `Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
 
 Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispiel so:
 10000 / 300`
@@ -66,27 +73,21 @@ Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispi
   if (amount < 3500) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Der Mindestkreditbetrag beträgt 3.500 €.`
+      message: `Der Mindestkreditbetrag beträgt 3.500 €.`
     };
   }
 
   if (amount > 300000) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Der maximale Kreditbetrag beträgt 300.000 €.`
+      message: `Der maximale Kreditbetrag beträgt 300.000 €.`
     };
   }
 
   if (desiredMonthly <= 0) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Die monatliche Rate muss größer als 0 sein.`
+      message: `Die monatliche Rate muss größer als 0 sein.`
     };
   }
 
@@ -113,9 +114,7 @@ Die monatliche Rate muss größer als 0 sein.`
   if (bestYear === null || bestMonthly === null) {
     return {
       success: false,
-      message: `Vielen Dank für die Rückmeldung.
-
-Mit der gewünschten monatlichen Rate ist für diesen Kreditbetrag innerhalb der maximalen Laufzeit leider kein Angebot möglich.
+      message: `Mit der gewünschten monatlichen Rate ist für diesen Kreditbetrag innerhalb der maximalen Laufzeit leider kein Angebot möglich.
 
 Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringerer Kreditbetrag für Sie infrage kommt.`
     };
@@ -129,19 +128,11 @@ Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringe
     bestYear,
     monthlyRounded,
     amountRounded,
-    message: `Vielen Dank für die Rückmeldung.
+    message: `Kredit über ${formatEuro(amountRounded)} €
 
-Wir können Ihnen folgendes Angebot machen:
+Laufzeit: ${bestYear} Jahre
 
-Kredit über ${formatEuro(amountRounded)} €
-
-Laufzeit ${bestYear} Jahre
-
-monatliche Rate ${formatEuro(monthlyRounded)} €
-
-Bitte bestätigen Sie dies kurz, damit wir Ihnen die Liste der für den Antrag erforderlichen Unterlagen zusenden können.
-
-Bei Fragen melden Sie sich gerne jederzeit.`
+Geschätzte monatliche Rate: ${formatEuro(monthlyRounded)} €`
   };
 }
 
@@ -187,7 +178,7 @@ function textToHtml(text) {
   return escapeHtml(text).replace(/\n/g, "<br>");
 }
 
-async function sendZohoEmail({ to, toName, subject, text }) {
+async function sendZohoEmail({ to, toName, subject, htmlbody }) {
   const host = process.env.ZOHO_CPAA_HOST || "https://cpaas.zoho.eu";
   const token = process.env.ZOHO_CPAA_TOKEN;
   const fromEmail = process.env.FROM_EMAIL;
@@ -216,8 +207,8 @@ async function sendZohoEmail({ to, toName, subject, text }) {
         address: replyTo
       }
     ],
-    subject: subject,
-    htmlbody: textToHtml(text)
+    subject,
+    htmlbody
   };
 
   const response = await fetch(`${host}/v1.1/email`, {
@@ -240,11 +231,140 @@ async function sendZohoEmail({ to, toName, subject, text }) {
   return data;
 }
 
+function buildClientEmailHtml({
+  name,
+  amount,
+  desiredMonthly,
+  result,
+  documentsList
+}) {
+  const safeName = escapeHtml(name || "");
+  const amountText = isNaN(amount) ? "" : `${formatEuro(amount)} €`;
+  const desiredText = isNaN(desiredMonthly) ? "" : `${formatEuro(desiredMonthly)} €`;
+
+  const calculationHtml = result.success
+    ? `
+      <p style="margin:6px 0;"><strong>Finanzierungsbetrag:</strong> ${formatEuro(result.amountRounded)} €</p>
+      <p style="margin:6px 0;"><strong>Laufzeit:</strong> ${result.bestYear} Jahre</p>
+      <p style="margin:6px 0;"><strong>Geschätzte monatliche Rate:</strong> ${formatEuro(result.monthlyRounded)} €</p>
+    `
+    : `<p style="margin:0;">${textToHtml(result.message)}</p>`;
+
+  const documentsHtml = textToHtml(documentsList);
+
+  return `
+<div style="margin:0; padding:0; background:#f4f6f8; font-family:Arial, Helvetica, sans-serif; color:#111827;">
+  <div style="max-width:680px; margin:0 auto; padding:24px;">
+    
+    <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
+      
+      <div style="background:#0f172a; padding:24px 28px;">
+        <h1 style="margin:0; color:#ffffff; font-size:24px; line-height:1.3;">
+          Ihre Anfrage ist eingegangen
+        </h1>
+        <p style="margin:8px 0 0; color:#cbd5e1; font-size:15px;">
+          Vielen Dank für Ihre Anfrage. Wir haben Ihre Angaben erhalten.
+        </p>
+      </div>
+
+      <div style="padding:28px;">
+        <p style="font-size:16px; line-height:1.6; margin:0 0 18px;">
+          Hallo ${safeName || " "},
+        </p>
+
+        <p style="font-size:16px; line-height:1.6; margin:0 0 20px;">
+          wir haben Ihre Angaben erhalten und eine erste unverbindliche Einschätzung vorbereitet.
+        </p>
+
+        <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:18px; margin:22px 0;">
+          <h2 style="font-size:18px; margin:0 0 12px; color:#111827;">Ihre Angaben</h2>
+          <p style="margin:6px 0;"><strong>Gewünschter Betrag:</strong> ${amountText}</p>
+          <p style="margin:6px 0;"><strong>Gewünschte monatliche Rate:</strong> ${desiredText}</p>
+        </div>
+
+        <div style="background:#eef6ff; border:1px solid #bfdbfe; border-radius:12px; padding:18px; margin:22px 0;">
+          <h2 style="font-size:18px; margin:0 0 12px; color:#1e3a8a;">Erste unverbindliche Einschätzung</h2>
+          ${calculationHtml}
+        </div>
+
+        <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:16px; margin:22px 0;">
+          <p style="margin:0; font-size:14px; line-height:1.6; color:#7c2d12;">
+            <strong>Wichtiger Hinweis:</strong> Dies ist noch keine finale Zusage. 
+            Die endgültige Prüfung hängt von Ihren Unterlagen, Ihrer Bonität und der Entscheidung des Finanzierungspartners ab.
+          </p>
+        </div>
+
+        <h2 style="font-size:18px; margin:24px 0 12px; color:#111827;">Benötigte Unterlagen</h2>
+        <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:18px; margin-bottom:22px; line-height:1.6;">
+          ${documentsHtml}
+        </div>
+
+        <h2 style="font-size:18px; margin:24px 0 12px; color:#111827;">Nächster Schritt</h2>
+        <p style="font-size:16px; line-height:1.6; margin:0 0 18px;">
+          Bitte antworten Sie einfach auf diese E-Mail mit den Unterlagen. Danach prüfen wir Ihre Anfrage weiter.
+        </p>
+
+        <p style="font-size:16px; line-height:1.6; margin:28px 0 0;">
+          Viele Grüße<br>
+          <strong>Ihr Finanzierungsteam</strong>
+        </p>
+      </div>
+    </div>
+
+    <p style="font-size:12px; color:#6b7280; line-height:1.5; margin:16px 4px 0;">
+      Sie erhalten diese E-Mail, weil Sie eine Finanzierungsanfrage gestellt haben.
+    </p>
+  </div>
+</div>
+`;
+}
+
+function buildInternalEmailHtml({
+  name,
+  email,
+  phone,
+  amount,
+  desiredMonthly,
+  result
+}) {
+  const calculationHtml = result.success
+    ? `
+      <p><strong>Finanzierungsbetrag:</strong> ${formatEuro(result.amountRounded)} €</p>
+      <p><strong>Laufzeit:</strong> ${result.bestYear} Jahre</p>
+      <p><strong>Geschätzte monatliche Rate:</strong> ${formatEuro(result.monthlyRounded)} €</p>
+    `
+    : `<p>${textToHtml(result.message)}</p>`;
+
+  return `
+<div style="font-family:Arial, Helvetica, sans-serif; background:#f4f6f8; padding:24px;">
+  <div style="max-width:680px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:24px;">
+    <h2 style="margin-top:0;">Neue Finanzierungsanfrage</h2>
+
+    <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+    <p><strong>E-Mail:</strong> ${escapeHtml(email)}</p>
+    <p><strong>Telefon:</strong> ${escapeHtml(phone)}</p>
+    <p><strong>Betrag:</strong> ${isNaN(amount) ? "" : formatEuro(amount) + " €"}</p>
+    <p><strong>Wunschrate:</strong> ${isNaN(desiredMonthly) ? "" : formatEuro(desiredMonthly) + " €"}</p>
+
+    <h3>Berechnung</h3>
+    ${calculationHtml}
+
+    <p>Bitte zeitnah bearbeiten.</p>
+  </div>
+</div>
+`;
+}
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "Loan webhook is running",
-    endpoints: ["/manual-calculate", "/calculate-loan", "/website-calculate", "/send-loan-email"]
+    endpoints: [
+      "/manual-calculate",
+      "/calculate-loan",
+      "/website-calculate",
+      "/send-loan-email"
+    ]
   });
 });
 
@@ -367,8 +487,6 @@ app.post("/send-loan-email", async (req, res) => {
     const amount = cleanNumber(req.body.loan_amount || req.body.amount);
     const desiredMonthly = cleanNumber(req.body.desired_monthly || req.body.monthly_rate);
 
-    const income = normalizeInput(req.body.income);
-    const schufa = normalizeInput(req.body.schufa);
     const employment = normalizeInput(req.body.employment);
 
     if (!email) {
@@ -381,65 +499,28 @@ app.post("/send-loan-email", async (req, res) => {
     const result = calculateOffer(amount, desiredMonthly);
     const documentsList = getDocumentsList(employment);
 
-    let calculationText = "";
+    const clientEmailHtml = buildClientEmailHtml({
+      name,
+      amount,
+      desiredMonthly,
+      result,
+      documentsList
+    });
 
-    if (result.success) {
-      calculationText = `Unverbindliche Beispielrechnung:
-Finanzierungsbetrag: ${formatEuro(result.amountRounded)} €
-Laufzeit: ${result.bestYear} Jahre
-Geschätzte monatliche Rate: ${formatEuro(result.monthlyRounded)} €`;
-    } else {
-      calculationText = `Hinweis:
-${result.message}`;
-    }
-
-    const clientEmailText = `Hallo ${name || ""},
-
-vielen Dank für Ihre Finanzierungsanfrage.
-
-Wir haben Ihre Angaben erhalten und eine erste unverbindliche Einschätzung für Sie vorbereitet.
-
-Ihre Angaben:
-Gewünschter Betrag: ${isNaN(amount) ? "" : formatEuro(amount) + " €"}
-Gewünschte monatliche Rate: ${isNaN(desiredMonthly) ? "" : formatEuro(desiredMonthly) + " €"}
-Einkommen vorhanden: ${income}
-SCHUFA-Situation: ${schufa}
-Beschäftigung: ${employment}
-
-${calculationText}
-
-Wichtig:
-Dies ist keine finale Zusage. Die endgültige Prüfung hängt von Ihren Unterlagen, Ihrer Bonität und der Entscheidung des Finanzierungspartners ab.
-
-Für die weitere Prüfung benötigen wir folgende Unterlagen:
-
-${documentsList}
-
-Bitte antworten Sie einfach auf diese E-Mail mit den Unterlagen oder teilen Sie uns mit, wann wir Sie telefonisch erreichen können.
-
-Viele Grüße
-Ihr Finanzierungsteam`;
-
-    const internalEmailText = `Neue Finanzierungsanfrage eingegangen:
-
-Name: ${name}
-E-Mail: ${email}
-Telefon: ${phone}
-Betrag: ${isNaN(amount) ? "" : formatEuro(amount) + " €"}
-Wunschrate: ${isNaN(desiredMonthly) ? "" : formatEuro(desiredMonthly) + " €"}
-Einkommen: ${income}
-SCHUFA: ${schufa}
-Beschäftigung: ${employment}
-
-${calculationText}
-
-Bitte zeitnah kontaktieren.`;
+    const internalEmailHtml = buildInternalEmailHtml({
+      name,
+      email,
+      phone,
+      amount,
+      desiredMonthly,
+      result
+    });
 
     await sendZohoEmail({
       to: email,
       toName: name,
-      subject: "Ihre Finanzierungsanfrage – erste unverbindliche Einschätzung",
-      text: clientEmailText
+      subject: "Ihre Anfrage ist eingegangen",
+      htmlbody: clientEmailHtml
     });
 
     if (process.env.INTERNAL_NOTIFY_EMAIL) {
@@ -447,7 +528,7 @@ Bitte zeitnah kontaktieren.`;
         to: process.env.INTERNAL_NOTIFY_EMAIL,
         toName: "Intern",
         subject: "Neue Finanzierungsanfrage",
-        text: internalEmailText
+        htmlbody: internalEmailHtml
       });
     }
 

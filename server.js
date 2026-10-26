@@ -26,17 +26,10 @@ function normalizeInput(text) {
   return String(text).trim();
 }
 
-function extractNumbers(text) {
-  const matches = String(text || "").match(/[\d.,]+/g);
-  if (!matches || matches.length < 2) return null;
-  return [matches[0], matches[1]];
-}
-
 function cleanNumber(value) {
   if (value === undefined || value === null) return NaN;
 
   let str = String(value).trim();
-
   const match = str.match(/[\d.,]+/);
   if (!match) return NaN;
 
@@ -80,87 +73,6 @@ function escapeHtml(text) {
 
 function textToHtml(text) {
   return escapeHtml(text).replace(/\n/g, "<br>");
-}
-
-/* =========================
-   LOAN CALCULATION
-========================= */
-
-function calculateOffer(amount, desiredMonthly) {
-  if (isNaN(amount) || isNaN(desiredMonthly)) {
-    return {
-      success: false,
-      message: `Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
-
-Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispiel so:
-10000 / 300`
-    };
-  }
-
-  if (amount < 3500) {
-    return {
-      success: false,
-      message: `Der Mindestkreditbetrag beträgt 3.500 €.`
-    };
-  }
-
-  if (amount > 300000) {
-    return {
-      success: false,
-      message: `Der maximale Kreditbetrag beträgt 300.000 €.`
-    };
-  }
-
-  if (desiredMonthly <= 0) {
-    return {
-      success: false,
-      message: `Die monatliche Rate muss größer als 0 sein.`
-    };
-  }
-
-  const minYears = 1;
-  const maxYears = 25;
-  const yearlyRate = 0.025;
-
-  let bestYear = null;
-  let bestMonthly = null;
-
-  for (let year = minYears; year <= maxYears; year++) {
-    const interestTotal = amount * yearlyRate * year;
-    const totalRepayment = amount + interestTotal;
-    const monthlyPayment = totalRepayment / (year * 12);
-
-    if (monthlyPayment <= desiredMonthly) {
-      if (bestMonthly === null || monthlyPayment > bestMonthly) {
-        bestMonthly = monthlyPayment;
-        bestYear = year;
-      }
-    }
-  }
-
-  if (bestYear === null || bestMonthly === null) {
-    return {
-      success: false,
-      message: `Mit der gewünschten monatlichen Rate ist für diesen Kreditbetrag innerhalb der maximalen Laufzeit leider kein Angebot möglich.
-
-Bitte teilen Sie uns gerne mit, ob eine höhere monatliche Rate oder ein geringerer Kreditbetrag für Sie infrage kommt.`
-    };
-  }
-
-  const monthlyRounded = Number(bestMonthly.toFixed(2));
-  const amountRounded = Number(amount.toFixed(2));
-
-  return {
-    success: true,
-    bestYear,
-    monthlyRounded,
-    amountRounded,
-    message: `Kredit über ${formatEuro(amountRounded)} €
-
-Laufzeit: ${bestYear} Jahre
-
-Geschätzte monatliche Rate: ${formatEuro(monthlyRounded)} €`
-  };
 }
 
 /* =========================
@@ -238,18 +150,10 @@ async function sendZohoEmail({ to, toName, subject, htmlbody }) {
    HTML EMAIL BUILDER
 ========================= */
 
-function buildClientEmailHtml({ name, amount, desiredMonthly, result, documentsList }) {
+function buildClientEmailHtml({ name, amount, desiredMonthlyText, documentsList }) {
   const safeName = escapeHtml(name || "");
   const amountText = isNaN(amount) ? "" : `${formatEuro(amount)} €`;
-  const desiredText = isNaN(desiredMonthly) ? "" : `${formatEuro(desiredMonthly)} €`;
-
-  const calculationHtml = result.success
-    ? `
-      <p style="margin:6px 0;"><strong>Finanzierungsbetrag:</strong> ${formatEuro(result.amountRounded)} €</p>
-      <p style="margin:6px 0;"><strong>Laufzeit:</strong> ${result.bestYear} Jahre</p>
-      <p style="margin:6px 0;"><strong>Geschätzte monatliche Rate:</strong> ${formatEuro(result.monthlyRounded)} €</p>
-    `
-    : `<p style="margin:0;">${textToHtml(result.message)}</p>`;
+  const monthlyText = escapeHtml(desiredMonthlyText || "");
 
   const documentsHtml = textToHtml(documentsList);
 
@@ -274,18 +178,20 @@ function buildClientEmailHtml({ name, amount, desiredMonthly, result, documentsL
         </p>
 
         <p style="font-size:16px; line-height:1.6; margin:0 0 20px;">
-          wir haben Ihre Angaben erhalten und eine erste unverbindliche Einschätzung vorbereitet.
+          wir haben Ihre Angaben erhalten und bereiten nun eine erste unverbindliche Einschätzung für Sie vor.
         </p>
 
         <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:18px; margin:22px 0;">
           <h2 style="font-size:18px; margin:0 0 12px; color:#111827;">Ihre Angaben</h2>
           <p style="margin:6px 0;"><strong>Gewünschter Betrag:</strong> ${amountText}</p>
-          <p style="margin:6px 0;"><strong>Gewünschte monatliche Rate:</strong> ${desiredText}</p>
+          <p style="margin:6px 0;"><strong>Gewünschte monatliche Rate:</strong> ${monthlyText}</p>
         </div>
 
         <div style="background:#eef6ff; border:1px solid #bfdbfe; border-radius:12px; padding:18px; margin:22px 0;">
           <h2 style="font-size:18px; margin:0 0 12px; color:#1e3a8a;">Erste unverbindliche Einschätzung</h2>
-          ${calculationHtml}
+          <p style="margin:0; font-size:15px; line-height:1.6;">
+            Auf Basis Ihrer Angaben prüfen wir nun, welche Finanzierungsmöglichkeiten für Sie infrage kommen.
+          </p>
         </div>
 
         <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:16px; margin:22px 0;">
@@ -361,120 +267,9 @@ app.get("/", (req, res) => {
     success: true,
     message: "Loan webhook is running",
     endpoints: [
-      "/manual-calculate",
-      "/calculate-loan",
-      "/website-calculate",
       "/send-loan-email"
     ]
   });
-});
-
-app.post("/manual-calculate", (req, res) => {
-  try {
-    const input = normalizeInput(req.body.input);
-    const extracted = extractNumbers(input);
-
-    if (!extracted) {
-      return res.status(200).json({
-        success: false,
-        message: `Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
-
-Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispiel so:
-10000 / 300`
-      });
-    }
-
-    const amount = cleanNumber(extracted[0]);
-    const desiredMonthly = cleanNumber(extracted[1]);
-    const result = calculateOffer(amount, desiredMonthly);
-
-    return res.status(200).json({
-      success: result.success,
-      message: result.message
-    });
-  } catch (error) {
-    console.error("manual-calculate error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Interner Serverfehler."
-    });
-  }
-});
-
-app.post("/calculate-loan", (req, res) => {
-  try {
-    const amount = cleanNumber(req.body.loan_amount);
-    const desiredMonthly = cleanNumber(req.body.desired_monthly);
-    const phone = req.body.phone ? String(req.body.phone).replace(/[^\d]/g, "") : "";
-
-    const result = calculateOffer(amount, desiredMonthly);
-
-    if (!result.success) {
-      return res.status(200).json({
-        success: true,
-        phone,
-        loan_amount: "",
-        desired_monthly: "",
-        best_year: "",
-        monthly_rate: "",
-        offer_text: "",
-        error_message: result.message
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      phone,
-      loan_amount: result.amountRounded.toFixed(2),
-      desired_monthly: desiredMonthly.toFixed(2),
-      best_year: String(result.bestYear),
-      monthly_rate: result.monthlyRounded.toFixed(2),
-      offer_text: result.message,
-      error_message: ""
-    });
-  } catch (error) {
-    console.error("calculate-loan error:", error);
-    return res.status(500).json({
-      success: false,
-      error_message: "Interner Serverfehler."
-    });
-  }
-});
-
-app.post("/website-calculate", (req, res) => {
-  try {
-    const amount = cleanNumber(req.body.loan_amount);
-    const desiredMonthly = cleanNumber(req.body.desired_monthly);
-
-    const result = calculateOffer(amount, desiredMonthly);
-
-    if (!result.success) {
-      return res.status(200).json({
-        success: false,
-        loan_amount: "",
-        best_year: "",
-        monthly_rate: "",
-        error_message: result.message
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      loan_amount: result.amountRounded.toFixed(2),
-      best_year: String(result.bestYear),
-      monthly_rate: result.monthlyRounded.toFixed(2),
-      error_message: ""
-    });
-  } catch (error) {
-    console.error("website-calculate error:", error);
-    return res.status(500).json({
-      success: false,
-      loan_amount: "",
-      best_year: "",
-      monthly_rate: "",
-      error_message: "Interner Serverfehler."
-    });
-  }
 });
 
 app.post("/send-loan-email", async (req, res) => {
@@ -503,12 +298,13 @@ app.post("/send-loan-email", async (req, res) => {
       body["Welchen Kreditbetrag möchten Sie anfragen?"] ||
       body["Kreditbetrag"];
 
-    const desiredMonthlyRaw =
+    const desiredMonthlyText = normalizeInput(
       body.desired_monthly ||
       body.monthly_rate ||
       body["Desired Monthly"] ||
       body["Welche monatliche Rate möchten Sie ungefähr zahlen?"] ||
-      body["Monatliche Rate"];
+      body["Monatliche Rate"]
+    );
 
     if (!email) {
       return res.status(400).json({
@@ -518,16 +314,12 @@ app.post("/send-loan-email", async (req, res) => {
     }
 
     const amount = cleanNumber(amountRaw);
-    const desiredMonthly = cleanNumber(desiredMonthlyRaw);
-
-    const result = calculateOffer(amount, desiredMonthly);
     const documentsList = getDocumentsList();
 
     const clientEmailHtml = buildClientEmailHtml({
       name,
       amount,
-      desiredMonthly,
-      result,
+      desiredMonthlyText,
       documentsList
     });
 
@@ -541,8 +333,7 @@ app.post("/send-loan-email", async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "E-Mail wurde erfolgreich über Zoho gesendet.",
-      email_sent_to: email,
-      calculation_success: result.success
+      email_sent_to: email
     });
   } catch (error) {
     console.error("send-loan-email error:", error);

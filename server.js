@@ -15,7 +15,7 @@ const COMPANY_NAME = "JJM Consulting GmbH";
 const COMPANY_ADDRESS = "Gerda-Hasselfeldt-Ring 6b, 85235 Pfaffenhofen an der Glonn";
 const COMPANY_PHONE = "0177 136 38 11";
 const COMPANY_WEBSITE = "https://www.jjmconsultinggmbh.com";
-const COMPANY_EMAIL = "finanzierung@jjmconsultinggmbh.com";
+const COMPANY_EMAIL = "info@jjmconsultinggmbh.com";
 
 /* =========================
    HELPERS
@@ -37,8 +37,7 @@ function cleanNumber(value) {
 
   let str = String(value).trim();
 
-  // If the value contains text or a range, take the first number-like value.
-  // Example: "3.500 - 20.000 €" -> "3.500"
+  // Take first number-like part if value contains ranges or text
   const match = str.match(/[\d.,]+/);
   if (!match) return NaN;
 
@@ -46,16 +45,13 @@ function cleanNumber(value) {
   str = str.replace(/[^\d.,]/g, "");
 
   if (str.includes(".") && str.includes(",")) {
-    // German format: 10.000,50 -> 10000.50
     str = str.replace(/\./g, "");
     str = str.replace(",", ".");
   } else if (str.includes(".")) {
-    // German thousand separator: 10.000 -> 10000
     if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
       str = str.replace(/\./g, "");
     }
   } else if (str.includes(",")) {
-    // German decimal comma or thousand comma
     if (/^\d{1,3}(,\d{3})+$/.test(str)) {
       str = str.replace(/,/g, "");
     } else {
@@ -169,36 +165,17 @@ Geschätzte monatliche Rate: ${formatEuro(monthlyRounded)} €`
 }
 
 /* =========================
-   DOCUMENT LIST
+   DOCUMENTS LIST
 ========================= */
 
-function getDocumentsList(employment) {
-  const emp = String(employment || "").toLowerCase();
-
-  if (emp.includes("selbst")) {
-    return `- Personalausweis oder Reisepass
-- Kontoauszüge der letzten 3 Monate
-- Aktuelle BWA
-- Letzter Steuerbescheid
-- Gewerbeanmeldung, falls vorhanden`;
-  }
-
-  if (emp.includes("rent")) {
-    return `- Personalausweis oder Reisepass
-- Rentenbescheid
-- Kontoauszüge der letzten 3 Monate`;
-  }
-
-  if (emp.includes("arbeitslos")) {
-    return `- Personalausweis oder Reisepass
-- Nachweis über aktuelle Leistungen
-- Kontoauszüge der letzten 3 Monate`;
-  }
-
+function getDocumentsList() {
   return `- Personalausweis oder Reisepass
-- Einkommensnachweise der letzten 3 Monate
-- Kontoauszüge der letzten 3 Monate
-- Arbeitsvertrag oder Beschäftigungsnachweis`;
+- Einkommensnachweis
+
+Als Einkommensnachweis gilt zum Beispiel:
+- Gehaltsabrechnung vom Arbeitgeber
+- Nachweis vom Jobcenter / Bürgergeld / Sozialleistungen
+- Rentenbescheid`;
 }
 
 /* =========================
@@ -259,16 +236,10 @@ async function sendZohoEmail({ to, toName, subject, htmlbody }) {
 }
 
 /* =========================
-   HTML EMAILS
+   HTML EMAIL BUILDERS
 ========================= */
 
-function buildClientEmailHtml({
-  name,
-  amount,
-  desiredMonthly,
-  result,
-  documentsList
-}) {
+function buildClientEmailHtml({ name, amount, desiredMonthly, result, documentsList }) {
   const safeName = escapeHtml(name || "");
   const amountText = isNaN(amount) ? "" : `${formatEuro(amount)} €`;
   const desiredText = isNaN(desiredMonthly) ? "" : `${formatEuro(desiredMonthly)} €`;
@@ -332,7 +303,7 @@ function buildClientEmailHtml({
 
         <h2 style="font-size:18px; margin:24px 0 12px; color:#111827;">Nächster Schritt</h2>
         <p style="font-size:16px; line-height:1.6; margin:0 0 18px;">
-          Bitte antworten Sie einfach auf diese E-Mail mit den Unterlagen. Danach prüfen wir Ihre Anfrage weiter.
+          Bitte antworten Sie einfach auf diese E-Mail mit dem Einkommensnachweis. Danach prüfen wir Ihre Anfrage weiter.
         </p>
 
         <p style="font-size:16px; line-height:1.6; margin:28px 0 0;">
@@ -357,7 +328,7 @@ function buildClientEmailHtml({
 
       <p style="margin:0 0 6px;">
         Telefon:
-        <a href="tel:${escapeHtml(COMPANY_PHONE.replace(/\\s/g, ""))}" style="color:#2563eb; text-decoration:none;">
+        <a href="tel:${escapeHtml(COMPANY_PHONE.replace(/\s/g, ""))}" style="color:#2563eb; text-decoration:none;">
           ${escapeHtml(COMPANY_PHONE)}
         </a>
       </p>
@@ -382,14 +353,7 @@ function buildClientEmailHtml({
 `;
 }
 
-function buildInternalEmailHtml({
-  name,
-  email,
-  phone,
-  amount,
-  desiredMonthly,
-  result
-}) {
+function buildInternalEmailHtml({ name, email, phone, amount, desiredMonthly, result }) {
   const calculationHtml = result.success
     ? `
       <p><strong>Finanzierungsbetrag:</strong> ${formatEuro(result.amountRounded)} €</p>
@@ -453,9 +417,7 @@ app.post("/manual-calculate", (req, res) => {
     if (!extracted) {
       return res.status(200).json({
         success: false,
-        message: `Vielen Dank für die Rückmeldung.
-
-Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
+        message: `Leider konnten wir Ihre Angaben nicht eindeutig verarbeiten.
 
 Bitte senden Sie den Kreditbetrag und die gewünschte monatliche Rate zum Beispiel so:
 10000 / 300`
@@ -596,15 +558,6 @@ app.post("/send-loan-email", async (req, res) => {
       body["Welche monatliche Rate möchten Sie ungefähr zahlen?"] ||
       body["Monatliche Rate"];
 
-    const employment = normalizeInput(
-      body.employment ||
-      body.Employment ||
-      body["Beschäftigung"]
-    );
-
-    const amount = cleanNumber(amountRaw);
-    const desiredMonthly = cleanNumber(desiredMonthlyRaw);
-
     if (!email) {
       return res.status(400).json({
         success: false,
@@ -612,8 +565,11 @@ app.post("/send-loan-email", async (req, res) => {
       });
     }
 
+    const amount = cleanNumber(amountRaw);
+    const desiredMonthly = cleanNumber(desiredMonthlyRaw);
+
     const result = calculateOffer(amount, desiredMonthly);
-    const documentsList = getDocumentsList(employment);
+    const documentsList = getDocumentsList();
 
     const clientEmailHtml = buildClientEmailHtml({
       name,

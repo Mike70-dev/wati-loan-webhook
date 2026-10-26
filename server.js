@@ -14,7 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 const COMPANY_NAME = "JJM Consulting GmbH";
 const COMPANY_ADDRESS = "Gerda-Hasselfeldt-Ring 6b, 85235 Pfaffenhofen an der Glonn";
 const COMPANY_PHONE = "0177 136 38 11";
-const COMPANY_WEBSITE = "https://www.jjmconsultinggmbh.co";
+const COMPANY_WEBSITE = "https://www.jjmconsultinggmbh.com";
 const COMPANY_EMAIL = "finanzierung@jjmconsultinggmbh.com";
 
 /* =========================

@@ -15,7 +15,7 @@ const COMPANY_NAME = "JJM Consulting GmbH";
 const COMPANY_ADDRESS = "Gerda-Hasselfeldt-Ring 6b, 85235 Pfaffenhofen an der Glonn";
 const COMPANY_PHONE = "0177 136 38 11";
 const COMPANY_WEBSITE = "https://www.jjmconsultinggmbh.com";
-const COMPANY_EMAIL = "finanzierung@jjmconsultinggmbh.com";
+const COMPANY_EMAIL = "info@jjmconsultinggmbh.com";
 
 /* =========================
    HELPERS
@@ -154,7 +154,6 @@ function buildClientEmailHtml({ name, amount, desiredMonthlyText, documentsList 
   const safeName = escapeHtml(name || "");
   const amountText = isNaN(amount) ? "" : `${formatEuro(amount)} €`;
   const monthlyText = escapeHtml(desiredMonthlyText || "");
-
   const documentsHtml = textToHtml(documentsList);
 
   return `
@@ -206,9 +205,16 @@ function buildClientEmailHtml({ name, amount, desiredMonthlyText, documentsList 
           ${documentsHtml}
         </div>
 
+        <h2 style="font-size:18px; margin:24px 0 12px; color:#111827;">Bitte antworten Sie einfach in diesem Format</h2>
+        <div style="background:#f3f4f6; border:1px solid #d1d5db; border-radius:10px; padding:18px; margin-bottom:22px; line-height:1.8;">
+          <strong>Straße + Hausnummer:</strong><br>
+          <strong>PLZ + Ort:</strong><br>
+          <strong>Einkommensnachweis im Anhang:</strong> Ja / Nein
+        </div>
+
         <h2 style="font-size:18px; margin:24px 0 12px; color:#111827;">Nächster Schritt</h2>
         <p style="font-size:16px; line-height:1.6; margin:0 0 18px;">
-          Bitte antworten Sie einfach auf diese E-Mail mit dem Einkommensnachweis. Danach prüfen wir Ihre Anfrage weiter.
+          Bitte antworten Sie auf diese E-Mail und ergänzen Sie die Angaben aus dem obigen Muster. Danach prüfen wir Ihre Anfrage weiter.
         </p>
 
         <p style="font-size:16px; line-height:1.6; margin:28px 0 0;">
@@ -266,9 +272,7 @@ app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "Loan webhook is running",
-    endpoints: [
-      "/send-loan-email"
-    ]
+    endpoints: ["/send-loan-email"]
   });
 });
 
@@ -302,7 +306,8 @@ app.post("/send-loan-email", async (req, res) => {
       body.desired_monthly ||
       body.monthly_rate ||
       body["Desired Monthly"] ||
-      body["Welche monatliche Rate möchten Sie ungefähr zahlen?"] ||
+      body["Wie viel können Sie monatlich für die Kreditrückzahlung zahlen?"] ||
+      body["Wie viel möchten Sie monatlich ungefähr zahlen?"] ||
       body["Monatliche Rate"]
     );
 
